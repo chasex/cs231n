@@ -137,7 +137,32 @@ class CaptioningRNN(object):
         # defined above to store loss and gradients; grads[k] should give the      #
         # gradients for self.params[k].                                            #
         ############################################################################
-        pass
+        h0 = features.dot(W_proj) + b_proj
+        x, cache_x = word_embedding_forward(captions_in, W_embed)
+        if self.cell_type == 'rnn':
+            h, cache_h = rnn_forward(x, h0, Wx, Wh, b)
+        else:
+            pass
+        y, cache_y = temporal_affine_forward(h, W_vocab, b_vocab)
+        loss, dy = temporal_softmax_loss(y, captions_out, mask)
+        
+        dh, dW_vocab, db_vocab = temporal_affine_backward(dy, cache_y)
+        if self.cell_type == 'rnn':
+            dx, dh0, dWx, dWh, db = rnn_backward(dh, cache_h)
+        else:
+            pass
+        dW_embed = word_embedding_backward(dx, cache_x)
+        dW_proj = features.T.dot(dh0)
+        db_proj = np.sum(dh0, axis=0)
+        
+        grads['W_proj'] = dW_proj
+        grads['b_proj'] = db_proj
+        grads['W_embed'] = dW_embed
+        grads['Wx'] = dWx
+        grads['Wh'] = dWh
+        grads['b'] = db
+        grads['W_vocab'] = dW_vocab
+        grads['b_vocab'] = db_vocab
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -199,7 +224,23 @@ class CaptioningRNN(object):
         # functions; you'll need to call rnn_step_forward or lstm_step_forward in #
         # a loop.                                                                 #
         ###########################################################################
-        pass
+        prev_h = features.dot(W_proj) + b_proj
+        x = self._start * np.ones((N,), dtype=np.int32)
+        for i in range(max_length):
+            x = W_embed[x, :]
+            if self.cell_type == 'rnn':
+                prev_h, _ = rnn_step_forward(x, prev_h, Wx, Wh, b)
+            else:
+                pass
+            
+            y = prev_h.dot(W_vocab) + b_vocab
+            probs = np.exp(y - np.max(y, axis=1, keepdims=True))
+            probs /= np.sum(probs, axis=1, keepdims=True)
+            preds = [0] * N
+            for n in range(N):
+                preds[n] = np.random.choice(probs.shape[1], 1, p=probs[n])[0]
+            x = np.stack(preds)
+            captions[:, i] = x
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
