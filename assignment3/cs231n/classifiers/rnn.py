@@ -142,7 +142,7 @@ class CaptioningRNN(object):
         if self.cell_type == 'rnn':
             h, cache_h = rnn_forward(x, h0, Wx, Wh, b)
         else:
-            pass
+            h, cache_h = lstm_forward(x, h0, Wx, Wh, b)
         y, cache_y = temporal_affine_forward(h, W_vocab, b_vocab)
         loss, dy = temporal_softmax_loss(y, captions_out, mask)
         
@@ -150,7 +150,7 @@ class CaptioningRNN(object):
         if self.cell_type == 'rnn':
             dx, dh0, dWx, dWh, db = rnn_backward(dh, cache_h)
         else:
-            pass
+            dx, dh0, dWx, dWh, db = lstm_backward(dh, cache_h)
         dW_embed = word_embedding_backward(dx, cache_x)
         dW_proj = features.T.dot(dh0)
         db_proj = np.sum(dh0, axis=0)
@@ -225,13 +225,14 @@ class CaptioningRNN(object):
         # a loop.                                                                 #
         ###########################################################################
         prev_h = features.dot(W_proj) + b_proj
+        prev_c = np.zeros_like(prev_h)
         x = self._start * np.ones((N,), dtype=np.int32)
         for i in range(max_length):
             x = W_embed[x, :]
             if self.cell_type == 'rnn':
                 prev_h, _ = rnn_step_forward(x, prev_h, Wx, Wh, b)
             else:
-                pass
+                prev_h, prev_c, _ = lstm_step_forward(x, prev_h, prev_c, Wx, Wh, b)
             
             y = prev_h.dot(W_vocab) + b_vocab
             probs = np.exp(y - np.max(y, axis=1, keepdims=True))
